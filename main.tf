@@ -1,7 +1,5 @@
 provider "azurerm" {}
 
-provider "azuread" {}
-
 data "azurerm_client_config" "current" {}
 
 data "external" "azure_account" {
@@ -21,8 +19,6 @@ locals {
       },
       "seal" : {
         "azurekeyvault" : {
-          "client_id" : "${azuread_service_principal.vault.application_id}",
-          "client_secret" : "${random_string.vault_sp_password.result}",
           "tenant_id" : "${data.azurerm_client_config.current.tenant_id}",
           "vault_name" : "${azurerm_key_vault.vault.name}",
           "key_name" : "${var.key_name}"
@@ -39,27 +35,6 @@ locals {
       }
     }
   )
-}
-
-# Create a Service Principal for Vault
-resource "azuread_application" "vault" {
-  name                       = "${var.name}-sp"
-  available_to_other_tenants = false
-}
-
-resource "azuread_service_principal" "vault" {
-  application_id = "${azuread_application.vault.application_id}"
-}
-
-resource "random_string" "vault_sp_password" {
-  length  = 36
-  special = false
-}
-
-resource "azuread_service_principal_password" "vault" {
-  service_principal_id = "${azuread_service_principal.vault.id}"
-  value                = "${random_string.vault_sp_password.result}"
-  end_date             = "2099-01-01T00:00:00Z"
 }
 
 resource "random_id" "vault" {
@@ -80,7 +55,7 @@ resource "azurerm_key_vault" "vault" {
 resource "azurerm_key_vault_access_policy" "vault_sp" {
   key_vault_id = "${azurerm_key_vault.vault.id}"
   tenant_id    = "${data.azurerm_client_config.current.tenant_id}"
-  object_id    = "${azuread_service_principal.vault.object_id}"
+  object_id    = "${azurerm_app_service.vault.identity.0.principal_id}"
 
   key_permissions = [
     "get",
@@ -164,6 +139,10 @@ resource "azurerm_app_service" "vault" {
     app_command_line = "server"
     linux_fx_version = "DOCKER|vault:${var.vault_version}"
     use_32_bit_worker_process = true
+  }
+
+  identity {
+    type = "SystemAssigned"
   }
 
   app_settings = {
