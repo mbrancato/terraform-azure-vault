@@ -159,6 +159,7 @@ resource "azurerm_app_service" "vault" {
   location            = "${var.location}"
   resource_group_name = "${var.resource_group_name}"
   app_service_plan_id = "${azurerm_app_service_plan.vault.id}"
+  https_only          = true
 
   site_config {
     app_command_line = "server"
