@@ -1,12 +1,10 @@
-provider "azurerm" {}
+provider "azurerm" {
+  version = "~> 1.35"
+}
 
 provider "azuread" {}
 
 data "azurerm_client_config" "current" {}
-
-data "external" "azure_account" {
-  program = ["az", "ad", "signed-in-user", "show", "--query", "{objectId: objectId}"]
-}
 
 locals {
   vault_config = jsonencode(
@@ -96,7 +94,7 @@ resource "azurerm_key_vault_access_policy" "vault_sp" {
 resource "azurerm_key_vault_access_policy" "azure_account" {
   key_vault_id = "${azurerm_key_vault.vault.id}"
   tenant_id    = "${data.azurerm_client_config.current.tenant_id}"
-  object_id    = "${data.external.azure_account.result.objectId}"
+  object_id    = "${data.azurerm_client_config.current.object_id}"
 
   key_permissions = [
     "get",
@@ -134,18 +132,17 @@ resource "azurerm_storage_account" "vault" {
 
 resource "azurerm_storage_container" "vault" {
   name                  = "vault"
-  resource_group_name   = "${var.resource_group_name}"
   storage_account_name  = "${azurerm_storage_account.vault.name}"
   container_access_type = "private"
 }
 
 # Deploy Vault on Azure App Service
 resource "azurerm_app_service_plan" "vault" {
-  name                      = "${var.name}-plan"
-  location                  = "${var.location}"
-  resource_group_name       = "${var.resource_group_name}"
-  kind                      = "Linux"
-  reserved                  = true
+  name                = "${var.name}-plan"
+  location            = "${var.location}"
+  resource_group_name = "${var.resource_group_name}"
+  kind                = "Linux"
+  reserved            = true
 
   sku {
     tier = "${var.service_plan_tier}"
@@ -162,9 +159,10 @@ resource "azurerm_app_service" "vault" {
   https_only          = true
 
   site_config {
-    app_command_line = "server"
-    linux_fx_version = "DOCKER|vault:${var.vault_version}"
+    app_command_line          = "server"
+    linux_fx_version          = "DOCKER|vault:${var.vault_version}"
     use_32_bit_worker_process = true
+    ftps_state                = "Disabled"
   }
 
   app_settings = {
